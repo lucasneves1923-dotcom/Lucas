@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { loadData, saveData } from '../lib/storage'
 import { generateId } from '../lib/id'
+import { isRunningInsideArtifact } from '../lib/artifactEnv'
+import { describeDbError, getDb, replaceCollection, snapshotToArray } from '../lib/dbStore'
 
 const DataContext = createContext(null)
 
@@ -10,6 +12,8 @@ const DEFAULT_BRANDING = {
   primaryColor: '#17222b',
   accentColor: '#b8934a',
 }
+
+const COLLECTIONS = ['members', 'financeEntries', 'assets', 'congregations']
 
 function emptyState() {
   return {
@@ -33,21 +37,90 @@ function mergeWithDefaults(data) {
   }
 }
 
+const insideArtifact = isRunningInsideArtifact()
+
 export function DataProvider({ children }) {
   const [state, setState] = useState(() => {
+    if (insideArtifact) return emptyState()
     const { data, mode } = loadData()
     return { ...mergeWithDefaults(data), __loadMode: mode }
   })
   const [saveStatus, setSaveStatus] = useState({ status: 'idle', mode: null, reason: null })
+  const [isLoading, setIsLoading] = useState(insideArtifact)
+  const [storageMode, setStorageMode] = useState(insideArtifact ? 'pending' : 'local')
   const debounceRef = useRef(null)
   const isFirstRun = useRef(true)
   const stateRef = useRef(state)
+  const dbRef = useRef(null)
 
   useEffect(() => {
     stateRef.current = state
   }, [state])
 
-  const performSave = useCallback(() => {
+  // --- Modo "db" (Artifact): assina as coleções e reflete cada mudança (própria ou de outro viewer) ---
+  useEffect(() => {
+    if (!insideArtifact) return undefined
+    let cancelled = false
+    const unsubscribers = []
+    const loaded = { members: false, financeEntries: false, assets: false, congregations: false, branding: false }
+
+    function maybeFinishLoading() {
+      if (!cancelled && Object.values(loaded).every(Boolean)) setIsLoading(false)
+    }
+
+    getDb().then((db) => {
+      if (cancelled) return
+      if (!db) {
+        // Sem acesso ao banco compartilhado nesta visualização: cai para o modo local.
+        const { data, mode } = loadData()
+        setState({ ...mergeWithDefaults(data), __loadMode: mode })
+        setStorageMode('local')
+        setIsLoading(false)
+        return
+      }
+
+      dbRef.current = db
+      setStorageMode('db')
+
+      COLLECTIONS.forEach((name) => {
+        const unsub = db.collection(name).onSnapshot(
+          (snap) => {
+            setState((s) => ({ ...s, [name]: snapshotToArray(snap) }))
+            loaded[name] = true
+            maybeFinishLoading()
+          },
+          (error) => {
+            setSaveStatus({ status: 'error', mode: 'db', reason: describeDbError(error) })
+            loaded[name] = true
+            maybeFinishLoading()
+          },
+        )
+        unsubscribers.push(unsub)
+      })
+
+      const unsubBranding = db.doc('settings/branding').onSnapshot(
+        (snap) => {
+          setState((s) => ({ ...s, branding: { ...DEFAULT_BRANDING, ...(snap.data() || {}) } }))
+          loaded.branding = true
+          maybeFinishLoading()
+        },
+        (error) => {
+          setSaveStatus({ status: 'error', mode: 'db', reason: describeDbError(error) })
+          loaded.branding = true
+          maybeFinishLoading()
+        },
+      )
+      unsubscribers.push(unsubBranding)
+    })
+
+    return () => {
+      cancelled = true
+      unsubscribers.forEach((unsub) => unsub())
+    }
+  }, [])
+
+  // --- Modo "local" (fora do Artifact, ou Artifact sem acesso ao db): localStorage com debounce ---
+  const performLocalSave = useCallback(() => {
     debounceRef.current = null
     const { __loadMode, ...persistable } = stateRef.current
     const result = saveData(persistable)
@@ -60,25 +133,27 @@ export function DataProvider({ children }) {
   }, [])
 
   useEffect(() => {
+    if (storageMode !== 'local') return undefined
     if (isFirstRun.current) {
       isFirstRun.current = false
-      return
+      return undefined
     }
     setSaveStatus((prev) => ({ ...prev, status: 'saving' }))
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(performSave, 400)
+    debounceRef.current = setTimeout(performLocalSave, 400)
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [state, performSave])
+  }, [state, storageMode, performLocalSave])
 
   // Se a aba for fechada/minimizada com uma alteração ainda "no forno" (dentro
-  // da janela de debounce de 400ms), salva na hora em vez de perder a mudança.
+  // da janela de debounce), salva na hora em vez de perder a mudança.
   useEffect(() => {
+    if (storageMode !== 'local') return undefined
     function flushIfPending() {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current)
-        performSave()
+        performLocalSave()
       }
     }
     function handleVisibilityChange() {
@@ -90,7 +165,7 @@ export function DataProvider({ children }) {
       window.removeEventListener('pagehide', flushIfPending)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [performSave])
+  }, [storageMode, performLocalSave])
 
   const applyBrandingCssVars = useCallback((branding) => {
     const root = document.documentElement
@@ -105,69 +180,112 @@ export function DataProvider({ children }) {
     applyBrandingCssVars(state.branding)
   }, [state.branding, applyBrandingCssVars])
 
-  const actions = useMemo(
-    () => ({
-      addMember: (member) =>
-        setState((s) => ({ ...s, members: [...s.members, { id: generateId(), ...member }] })),
-      updateMember: (id, patch) =>
-        setState((s) => ({
-          ...s,
-          members: s.members.map((m) => (m.id === id ? { ...m, ...patch } : m)),
-        })),
-      removeMember: (id) =>
-        setState((s) => ({ ...s, members: s.members.filter((m) => m.id !== id) })),
-      importMembers: (members) =>
-        setState((s) => ({
+  // --- Ações: em modo db, escrevem direto no banco (a assinatura acima reflete o resultado);
+  // em modo local, atualizam o estado em memória (o efeito de debounce acima persiste). ---
+  const actions = useMemo(() => {
+    function localMutate(updater) {
+      setState((s) => updater(s))
+    }
+
+    async function dbWrite(fn) {
+      setSaveStatus((prev) => ({ ...prev, status: 'saving' }))
+      try {
+        await fn(dbRef.current)
+        setSaveStatus({ status: 'saved', mode: 'db', reason: null, savedAt: new Date().toISOString() })
+      } catch (error) {
+        setSaveStatus({ status: 'error', mode: 'db', reason: describeDbError(error) })
+      }
+    }
+
+    function makeCrud(collectionName, stateKey) {
+      return {
+        add: (item) => {
+          const id = generateId()
+          if (storageMode === 'db') {
+            return dbWrite((db) => db.collection(collectionName).doc(id).set(item))
+          }
+          return localMutate((s) => ({ ...s, [stateKey]: [...s[stateKey], { id, ...item }] }))
+        },
+        update: (id, patch) => {
+          if (storageMode === 'db') {
+            return dbWrite((db) => db.collection(collectionName).doc(id).update(patch))
+          }
+          return localMutate((s) => ({
+            ...s,
+            [stateKey]: s[stateKey].map((item) => (item.id === id ? { ...item, ...patch } : item)),
+          }))
+        },
+        remove: (id) => {
+          if (storageMode === 'db') {
+            return dbWrite((db) => db.collection(collectionName).doc(id).delete())
+          }
+          return localMutate((s) => ({ ...s, [stateKey]: s[stateKey].filter((item) => item.id !== id) }))
+        },
+      }
+    }
+
+    const membersCrud = makeCrud('members', 'members')
+    const financeCrud = makeCrud('financeEntries', 'financeEntries')
+    const assetsCrud = makeCrud('assets', 'assets')
+    const congregationsCrud = makeCrud('congregations', 'congregations')
+
+    return {
+      addMember: membersCrud.add,
+      updateMember: membersCrud.update,
+      removeMember: membersCrud.remove,
+      importMembers: (members) => {
+        if (storageMode === 'db') {
+          return dbWrite((db) =>
+            Promise.all(members.map((m) => db.collection('members').doc(generateId()).set(m))),
+          )
+        }
+        return localMutate((s) => ({
           ...s,
           members: [...s.members, ...members.map((m) => ({ id: generateId(), ...m }))],
-        })),
+        }))
+      },
 
-      addFinanceEntry: (entry) =>
-        setState((s) => ({
-          ...s,
-          financeEntries: [...s.financeEntries, { id: generateId(), ...entry }],
-        })),
-      updateFinanceEntry: (id, patch) =>
-        setState((s) => ({
-          ...s,
-          financeEntries: s.financeEntries.map((e) => (e.id === id ? { ...e, ...patch } : e)),
-        })),
-      removeFinanceEntry: (id) =>
-        setState((s) => ({ ...s, financeEntries: s.financeEntries.filter((e) => e.id !== id) })),
+      addFinanceEntry: financeCrud.add,
+      updateFinanceEntry: financeCrud.update,
+      removeFinanceEntry: financeCrud.remove,
 
-      addAsset: (asset) =>
-        setState((s) => ({ ...s, assets: [...s.assets, { id: generateId(), ...asset }] })),
-      updateAsset: (id, patch) =>
-        setState((s) => ({
-          ...s,
-          assets: s.assets.map((a) => (a.id === id ? { ...a, ...patch } : a)),
-        })),
-      removeAsset: (id) => setState((s) => ({ ...s, assets: s.assets.filter((a) => a.id !== id) })),
+      addAsset: assetsCrud.add,
+      updateAsset: assetsCrud.update,
+      removeAsset: assetsCrud.remove,
 
-      addCongregation: (congregation) =>
-        setState((s) => ({
-          ...s,
-          congregations: [...s.congregations, { id: generateId(), ...congregation }],
-        })),
-      updateCongregation: (id, patch) =>
-        setState((s) => ({
-          ...s,
-          congregations: s.congregations.map((c) => (c.id === id ? { ...c, ...patch } : c)),
-        })),
-      removeCongregation: (id) =>
-        setState((s) => ({ ...s, congregations: s.congregations.filter((c) => c.id !== id) })),
+      addCongregation: congregationsCrud.add,
+      updateCongregation: congregationsCrud.update,
+      removeCongregation: congregationsCrud.remove,
 
-      updateBranding: (patch) =>
-        setState((s) => ({ ...s, branding: { ...s.branding, ...patch } })),
+      updateBranding: (patch) => {
+        const nextBranding = { ...stateRef.current.branding, ...patch }
+        if (storageMode === 'db') {
+          return dbWrite((db) => db.doc('settings/branding').set(nextBranding))
+        }
+        return localMutate((s) => ({ ...s, branding: nextBranding }))
+      },
 
-      restoreFromBackup: (data) => setState({ ...mergeWithDefaults(data), __loadMode: state.__loadMode }),
-    }),
-    [state.__loadMode],
-  )
+      restoreFromBackup: (data) => {
+        const merged = mergeWithDefaults(data)
+        if (storageMode === 'db') {
+          return dbWrite(async (db) => {
+            await Promise.all([
+              replaceCollection(db, 'members', merged.members),
+              replaceCollection(db, 'financeEntries', merged.financeEntries),
+              replaceCollection(db, 'assets', merged.assets),
+              replaceCollection(db, 'congregations', merged.congregations),
+              db.doc('settings/branding').set(merged.branding),
+            ])
+          })
+        }
+        return setState((s) => ({ ...merged, __loadMode: s.__loadMode }))
+      },
+    }
+  }, [storageMode])
 
   const value = useMemo(
-    () => ({ ...state, saveStatus, ...actions }),
-    [state, saveStatus, actions],
+    () => ({ ...state, saveStatus, isLoading, storageMode, ...actions }),
+    [state, saveStatus, isLoading, storageMode, actions],
   )
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>

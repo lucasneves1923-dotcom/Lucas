@@ -111,12 +111,21 @@ Cálculo de depreciação (linear): `(valor total − valor residual) ÷ vida ú
 
 ## Notas de implementação (esta versão)
 
-Esta implementação roda como um app Vite + React padrão (não como artefato
-Claude), então não tem acesso à API `window.storage` do ambiente de artefato
-citada acima. A camada de persistência (`src/lib/storage.js`) reproduz o
-mesmo comportamento observável — modo compartilhado com fallback automático
-para modo individual, diagnóstico e indicador de salvamento — usando
-`localStorage`/`sessionStorage` do navegador. Ou seja, "compartilhado" aqui
-significa *entre abas do mesmo navegador*, não entre dispositivos diferentes;
-o backup manual em `.json` é a forma real de levar dados entre dispositivos
-ou navegadores. Ver `README.md` para detalhes.
+Esta implementação é um app Vite + React que roda tanto como projeto comum
+(`npm run dev`/`npm run build`) quanto publicado como Artifact da Claude —
+o mesmo código se adapta em tempo de execução aos dois ambientes.
+
+Publicado como Artifact, a persistência usa a capability `db` da Claude:
+um banco compartilhado de verdade entre todos que abrem o link (exige login
+na mesma organização Claude), com atualização em tempo real entre viewers —
+isto é o que a especificação original chamava de "API de storage do
+artefato" com "dados compartilhados". Rodando como app comum (fora do
+Artifact), ou se a capability `db` não estiver disponível nessa
+visualização, o app cai para `localStorage`/`sessionStorage` do navegador
+(`src/lib/storage.js`), com o mesmo comportamento observável descrito
+originalmente — modo compartilhado com fallback para individual, diagnóstico
+e indicador de salvamento — mas "compartilhado" nesse caso significa *entre
+abas do mesmo navegador*, não entre dispositivos diferentes. O backup manual
+em `.json` continua valendo nos dois modos, como rede de segurança e como
+forma de levar dados entre ambientes. Ver `README.md` para detalhes de cada
+capability usada (`db`, `sample`, `downloads`).

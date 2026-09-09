@@ -47,9 +47,11 @@ Por isso o **backup manual** (Personalização → Backup, exporta/importa
 para outro, ou de se proteger contra perda de dados — use-o com regularidade
 enquanto o produto não tiver um backend/sincronização de verdade.
 
-Não há autenticação: qualquer pessoa com acesso ao navegador onde o app roda
-vê e edita os dados. Adequado para validação interna de uma única igreja, não
-para uso público.
+Neste modo local não há autenticação: qualquer pessoa com acesso ao
+navegador onde o app roda vê e edita os dados. Adequado para validação
+interna de uma única igreja, não para uso público. (Publicado como Artifact
+com a capability `db`, descrita abaixo, o acesso já exige login na Claude na
+mesma organização.)
 
 ## Importação de comprovante por IA
 
@@ -67,6 +69,17 @@ de produção com CSS/JS inline em um único HTML). Nesse ambiente o app se
 adapta automaticamente (detecção via `window.claude?.use`, ver
 `src/lib/artifactEnv.js`):
 
+- **Persistência dos dados** usa a capability `db` (banco de dados
+  compartilhado do próprio Artifact, `src/lib/dbStore.js` +
+  `src/context/DataContext.jsx`) em vez de `localStorage`. Isso resolve as
+  duas limitações da seção anterior: os dados passam a ser realmente
+  compartilhados entre todos que abrem o link (exige estar logado na Claude,
+  na mesma organização) e sobrevivem a fechar/reabrir de forma confiável,
+  sem depender do armazenamento do navegador de cada pessoa. Membros,
+  financeiro, patrimônio e congregações viram coleções (`members`,
+  `financeEntries`, `assets`, `congregations`); a marca fica no documento
+  `settings/branding`. Cada mutação escreve direto no banco; a tela reflete
+  as mudanças de qualquer pessoa em tempo real via `onSnapshot`.
 - **Importação de comprovante por IA** usa a capability `sample` (Claude do
   próprio ambiente do artefato) em vez da chave de API — não precisa
   configurar nada (`src/lib/claudeReceipt.js`).
@@ -74,6 +87,13 @@ adapta automaticamente (detecção via `window.claude?.use`, ver
   download comum, que o sandbox de artefatos bloqueia silenciosamente
   (`src/lib/downloadFile.js`).
 
+Se o app roda dentro do Artifact mas a capability `db` não estiver disponível
+nesta visualização (`claude.use("db")` resolve `null`), ele degrada
+automaticamente para o modo local (`localStorage`) descrito na seção
+anterior — não trava nem perde funcionalidade, só perde o compartilhamento
+entre pessoas/dispositivos.
+
 Fora do ambiente de artefato (rodando como app comum, via `npm run dev`/
-`npm run build`), o comportamento cai de volta para chave de API + link de
-download tradicional, como descrito nas seções acima.
+`npm run build`), tudo cai de volta para `localStorage` + chave de API +
+link de download tradicional, como descrito nas seções acima — esse
+caminho não depende de nenhuma capability e continua funcionando sozinho.
