@@ -59,3 +59,21 @@ usando uma chave de API informada pelo usuário e salva em `localStorage`.
 Como não há backend para intermediar a chamada com segurança, use uma chave
 com escopo limitado. O resultado da IA nunca é salvo automaticamente — sempre
 abre o formulário para revisão humana antes de confirmar.
+
+## Publicado como Artifact da Claude
+
+Este mesmo código também roda publicado como um Artifact da Claude (build
+de produção com CSS/JS inline em um único HTML). Nesse ambiente o app se
+adapta automaticamente (detecção via `window.claude?.use`, ver
+`src/lib/artifactEnv.js`):
+
+- **Importação de comprovante por IA** usa a capability `sample` (Claude do
+  próprio ambiente do artefato) em vez da chave de API — não precisa
+  configurar nada (`src/lib/claudeReceipt.js`).
+- **Exportar backup** usa a capability `downloads` em vez de um link de
+  download comum, que o sandbox de artefatos bloqueia silenciosamente
+  (`src/lib/downloadFile.js`).
+
+Fora do ambiente de artefato (rodando como app comum, via `npm run dev`/
+`npm run build`), o comportamento cai de volta para chave de API + link de
+download tradicional, como descrito nas seções acima.

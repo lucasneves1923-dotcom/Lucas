@@ -3,6 +3,7 @@ import { Download, Upload } from 'lucide-react'
 import { Card, ConfirmDialog } from '../../components/common/ui.jsx'
 import { useChurchData } from '../../context/DataContext.jsx'
 import { buildBackupJson, parseBackupJson } from '../../lib/storage'
+import { saveGeneratedFile } from '../../lib/downloadFile'
 import { todayIso } from '../../lib/format'
 
 export default function BackupSettings() {
@@ -12,15 +13,14 @@ export default function BackupSettings() {
   const [pendingRestore, setPendingRestore] = useState(null)
   const [message, setMessage] = useState('')
 
-  function handleExport() {
+  async function handleExport() {
+    setMessage('')
     const json = buildBackupJson({ members, financeEntries, assets, congregations, branding })
-    const blob = new Blob([json], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `gestorchurch-backup-${todayIso()}.json`
-    link.click()
-    URL.revokeObjectURL(url)
+    try {
+      await saveGeneratedFile(`gestorchurch-backup-${todayIso()}.json`, json)
+    } catch (error) {
+      setMessage(error.message)
+    }
   }
 
   function handleFileSelected(file) {

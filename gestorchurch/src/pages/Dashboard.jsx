@@ -121,13 +121,21 @@ export default function Dashboard() {
         <Card title="Entradas x Saídas (últimos 6 meses)">
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={monthlySeries}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#dde2db" />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => formatCurrency(v).replace(/ /g, ' ')} width={90} />
-              <Tooltip formatter={(value) => formatCurrency(value)} />
-              <Legend />
-              <Bar dataKey="entradas" name="Entradas" fill="#2f7d5a" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="saidas" name="Saídas" fill="#b3462c" radius={[4, 4, 0, 0]} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+              <XAxis dataKey="month" tick={{ fontSize: 12, fill: 'var(--color-text-muted)' }} />
+              <YAxis
+                tick={{ fontSize: 12, fill: 'var(--color-text-muted)' }}
+                tickFormatter={(v) => formatCurrency(v).replace(/ /g, ' ')}
+                width={90}
+              />
+              <Tooltip
+                formatter={(value) => formatCurrency(value)}
+                contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8 }}
+                labelStyle={{ color: 'var(--color-text)' }}
+              />
+              <Legend wrapperStyle={{ color: 'var(--color-text)' }} />
+              <Bar dataKey="entradas" name="Entradas" fill="var(--color-success)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="saidas" name="Saídas" fill="var(--color-danger)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -143,8 +151,12 @@ export default function Dashboard() {
                     <Cell key={entry.name} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value) => formatCurrency(value)} />
-                <Legend />
+                <Tooltip
+                  formatter={(value) => formatCurrency(value)}
+                  contentStyle={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8 }}
+                  labelStyle={{ color: 'var(--color-text)' }}
+                />
+                <Legend wrapperStyle={{ color: 'var(--color-text)' }} />
               </PieChart>
             </ResponsiveContainer>
           )}

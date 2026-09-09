@@ -1,16 +1,23 @@
 :root {
+  /* Marca (customizável em Personalização) — não muda com o tema */
   --color-ink: #17222b;
   --color-ink-soft: #29394a;
   --color-accent: #b8934a;
   --color-accent-soft: #e4cfa0;
+
+  /* Tema (claro por padrão) */
   --color-bg: #eef1ec;
   --color-surface: #ffffff;
+  --color-input-bg: #ffffff;
   --color-border: #dde2db;
   --color-text: #1c2530;
   --color-text-muted: #5b6773;
+  --color-heading: var(--color-ink);
+  --color-hover-tint: rgba(23, 34, 43, 0.04);
   --color-success: #2f7d5a;
   --color-danger: #b3462c;
   --color-warning: #b8934a;
+  --shadow-card: 0 1px 2px rgba(23, 34, 43, 0.06), 0 4px 12px rgba(23, 34, 43, 0.06);
 
   --font-serif: 'Source Serif 4', Georgia, serif;
   --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
@@ -19,9 +26,45 @@
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
-  --shadow-card: 0 1px 2px rgba(23, 34, 43, 0.06), 0 4px 12px rgba(23, 34, 43, 0.06);
   --sidebar-width: 232px;
   --sidebar-width-rail: 72px;
+
+  color-scheme: light dark;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-bg: #121820;
+    --color-surface: #1b232c;
+    --color-input-bg: #232d38;
+    --color-border: rgba(255, 255, 255, 0.12);
+    --color-text: #e7e9e4;
+    --color-text-muted: #99a3ac;
+    --color-heading: color-mix(in srgb, var(--color-ink) 45%, white 55%);
+    --color-hover-tint: rgba(255, 255, 255, 0.06);
+    --color-success: #5cb98a;
+    --color-danger: #e0846a;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 16px rgba(0, 0, 0, 0.35);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-bg: #121820;
+  --color-surface: #1b232c;
+  --color-input-bg: #232d38;
+  --color-border: rgba(255, 255, 255, 0.12);
+  --color-text: #e7e9e4;
+  --color-text-muted: #99a3ac;
+  --color-heading: color-mix(in srgb, var(--color-ink) 45%, white 55%);
+  --color-hover-tint: rgba(255, 255, 255, 0.06);
+  --color-success: #5cb98a;
+  --color-danger: #e0846a;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 16px rgba(0, 0, 0, 0.35);
 }
 
 * {
@@ -47,8 +90,9 @@ h2,
 h3,
 h4 {
   font-family: var(--font-serif);
-  color: var(--color-ink);
+  color: var(--color-heading);
   margin: 0 0 0.4em;
+  text-wrap: balance;
 }
 
 .num,
@@ -252,7 +296,7 @@ a {
 }
 
 .btn-secondary:hover {
-  background: rgba(23, 34, 43, 0.04);
+  background: var(--color-hover-tint);
 }
 
 .btn-danger {
@@ -292,7 +336,7 @@ a {
   padding: 9px 11px;
   font-size: 0.92rem;
   font-family: var(--font-sans);
-  background: #fff;
+  background: var(--color-input-bg);
   color: var(--color-text);
 }
 
@@ -347,8 +391,8 @@ table.data-table {
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 600;
-  background: rgba(23, 34, 43, 0.08);
-  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-text) 10%, transparent);
+  color: var(--color-heading);
 }
 
 .badge-success {
@@ -403,7 +447,7 @@ table.data-table {
 }
 
 .modal-panel {
-  background: #fff;
+  background: var(--color-surface);
   border-radius: var(--radius-lg);
   max-width: 640px;
   width: 100%;
@@ -478,7 +522,7 @@ table.data-table {
   font-family: var(--font-mono);
   font-size: 1.5rem;
   font-weight: 600;
-  color: var(--color-ink);
+  color: var(--color-heading);
 }
 
 .tabs {
@@ -501,7 +545,7 @@ table.data-table {
 }
 
 .tab-btn.is-active {
-  color: var(--color-ink);
+  color: var(--color-heading);
   border-bottom-color: var(--color-accent);
 }
 

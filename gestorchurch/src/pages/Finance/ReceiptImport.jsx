@@ -1,10 +1,19 @@
 import { useState } from 'react'
 import { Modal } from '../../components/common/ui.jsx'
 import { useChurchData } from '../../context/DataContext.jsx'
-import { extractReceiptData, fileToBase64, getSavedApiKey, saveApiKey } from '../../lib/claudeReceipt'
+import {
+  extractReceiptData,
+  extractReceiptDataViaSample,
+  fileToBase64,
+  getSavedApiKey,
+  isRunningInsideArtifact,
+  saveApiKey,
+} from '../../lib/claudeReceipt'
 import { findBestMatch } from '../../lib/csv'
 import { todayIso } from '../../lib/format'
 import FinanceForm from './FinanceForm.jsx'
+
+const USE_SAMPLE_CAPABILITY = isRunningInsideArtifact()
 
 export default function ReceiptImport({ onClose }) {
   const { members } = useChurchData()
@@ -23,24 +32,27 @@ export default function ReceiptImport({ onClose }) {
   }
 
   async function handleAnalyze() {
-    if (!apiKey.trim()) {
-      setErrorMessage('Informe sua chave de API da Anthropic (Claude) para analisar o comprovante.')
-      return
-    }
     if (!file) {
       setErrorMessage('Selecione uma foto ou print do comprovante.')
+      return
+    }
+    if (!USE_SAMPLE_CAPABILITY && !apiKey.trim()) {
+      setErrorMessage('Informe sua chave de API da Anthropic (Claude) para analisar o comprovante.')
       return
     }
     setStatus('analyzing')
     setErrorMessage('')
     try {
-      saveApiKey(apiKey.trim())
-      const base64Image = await fileToBase64(file)
-      const result = await extractReceiptData({
-        apiKey: apiKey.trim(),
-        base64Image,
-        mediaType: file.type || 'image/jpeg',
-      })
+      const result = USE_SAMPLE_CAPABILITY
+        ? await extractReceiptDataViaSample(file)
+        : await extractReceiptData({
+            apiKey: (() => {
+              saveApiKey(apiKey.trim())
+              return apiKey.trim()
+            })(),
+            base64Image: await fileToBase64(file),
+            mediaType: file.type || 'image/jpeg',
+          })
       setExtracted(result)
       setStatus('done')
     } catch (error) {
@@ -83,20 +95,22 @@ export default function ReceiptImport({ onClose }) {
         provável — nada é salvo automaticamente, você revisa antes de confirmar.
       </p>
 
-      <div className="field">
-        <label htmlFor="apiKey">Chave de API da Anthropic (Claude)</label>
-        <input
-          id="apiKey"
-          type="password"
-          placeholder="sk-ant-…"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-        />
-        <span className="text-muted" style={{ fontSize: '0.78rem' }}>
-          Fica salva apenas neste navegador. Como este app roda sem backend, a chave é usada diretamente do
-          navegador — use uma chave com escopo limitado se possível.
-        </span>
-      </div>
+      {!USE_SAMPLE_CAPABILITY && (
+        <div className="field">
+          <label htmlFor="apiKey">Chave de API da Anthropic (Claude)</label>
+          <input
+            id="apiKey"
+            type="password"
+            placeholder="sk-ant-…"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+          />
+          <span className="text-muted" style={{ fontSize: '0.78rem' }}>
+            Fica salva apenas neste navegador. Como este app roda sem backend, a chave é usada diretamente do
+            navegador — use uma chave com escopo limitado se possível.
+          </span>
+        </div>
+      )}
 
       <div className="field">
         <label htmlFor="receiptFile">Foto ou print do comprovante</label>
