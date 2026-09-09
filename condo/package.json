@@ -6,11 +6,18 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node run-tests.js"
+    "test": "node run-tests.js",
+    "test:pg": "node test-pg-db.js",
+    "test:mqtt": "node test-mqtt.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "express": "^4.19.2",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "mqtt": "^5.10.1",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "aedes": "^0.51.3"
   }
 }

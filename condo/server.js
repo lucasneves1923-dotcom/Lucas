@@ -1,12 +1,18 @@
 'use strict';
 
-// Ponto de entrada real do backend. Sem DATABASE_URL configurada, sobe em
-// "modo demo" com o banco em memoria (mock-db.js) so para permitir rodar e
-// explorar a API localmente - nunca use esse modo em producao, ele perde
-// todos os dados a cada reinicio.
+// Ponto de entrada real do backend.
 //
-// Proximo passo (ver README): trocar o bloco `else` abaixo por um driver
-// real de Postgres (`pg`) implementando a mesma interface de mock-db.js.
+//   - DATABASE_URL configurada -> usa Postgres de verdade (pg-db.js).
+//     Funciona identico apontando para um Postgres local ou para o
+//     projeto Supabase (Supabase e so Postgres gerenciado).
+//   - DATABASE_URL ausente -> sobe em "modo demo" com o banco em memoria
+//     (mock-db.js). Nunca use esse modo em producao: perde todos os
+//     dados a cada reinicio.
+//
+//   - MQTT_URL configurada -> aciona o portao de verdade, publicando no
+//     broker MQTT real (mqtt-hardware.js).
+//   - MQTT_URL ausente -> usa um placeholder que so loga no console, para
+//     permitir testar o resto do fluxo sem broker nenhum.
 
 const { criarApp } = require('./api');
 
@@ -14,10 +20,8 @@ async function main() {
   let db;
 
   if (process.env.DATABASE_URL) {
-    throw new Error(
-      'DATABASE_URL configurada, mas o driver real de Postgres ainda nao foi implementado. ' +
-        'Proximo passo do projeto: escrever pg-db.js com a mesma interface de mock-db.js.'
-    );
+    const { criarPgDb } = require('./pg-db');
+    db = criarPgDb(process.env.DATABASE_URL);
   } else {
     // eslint-disable-next-line no-console
     console.warn('[server] DATABASE_URL nao configurada - subindo em modo demo com banco em memoria.');
@@ -31,7 +35,16 @@ async function main() {
     console.warn('[server] JWT_SECRET nao configurado - usando um valor fixo de desenvolvimento.');
   }
 
-  const app = criarApp(db, { jwtSecret });
+  let acionarHardware;
+  if (process.env.MQTT_URL) {
+    const { criarAcionarHardware } = require('./mqtt-hardware');
+    acionarHardware = criarAcionarHardware({ url: process.env.MQTT_URL });
+  } else {
+    // eslint-disable-next-line no-console
+    console.warn('[server] MQTT_URL nao configurada - acionamento do portao e so um placeholder (log no console).');
+  }
+
+  const app = criarApp(db, { jwtSecret, acionarHardware });
   const porta = process.env.PORT || 3000;
   app.listen(porta, () => {
     // eslint-disable-next-line no-console
