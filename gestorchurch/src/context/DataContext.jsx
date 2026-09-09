@@ -41,6 +41,23 @@ export function DataProvider({ children }) {
   const [saveStatus, setSaveStatus] = useState({ status: 'idle', mode: null, reason: null })
   const debounceRef = useRef(null)
   const isFirstRun = useRef(true)
+  const stateRef = useRef(state)
+
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
+
+  const performSave = useCallback(() => {
+    debounceRef.current = null
+    const { __loadMode, ...persistable } = stateRef.current
+    const result = saveData(persistable)
+    setSaveStatus({
+      status: result.ok ? 'saved' : 'error',
+      mode: result.mode,
+      reason: result.reason || null,
+      savedAt: new Date().toISOString(),
+    })
+  }, [])
 
   useEffect(() => {
     if (isFirstRun.current) {
@@ -49,19 +66,31 @@ export function DataProvider({ children }) {
     }
     setSaveStatus((prev) => ({ ...prev, status: 'saving' }))
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      const { __loadMode, ...persistable } = state
-      const result = saveData(persistable)
-      setSaveStatus({
-        status: result.ok ? 'saved' : 'error',
-        mode: result.mode,
-        reason: result.reason || null,
-        savedAt: new Date().toISOString(),
-      })
-    }, 400)
-    return () => clearTimeout(debounceRef.current)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state])
+    debounceRef.current = setTimeout(performSave, 400)
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [state, performSave])
+
+  // Se a aba for fechada/minimizada com uma alteração ainda "no forno" (dentro
+  // da janela de debounce de 400ms), salva na hora em vez de perder a mudança.
+  useEffect(() => {
+    function flushIfPending() {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+        performSave()
+      }
+    }
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') flushIfPending()
+    }
+    window.addEventListener('pagehide', flushIfPending)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.removeEventListener('pagehide', flushIfPending)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [performSave])
 
   const applyBrandingCssVars = useCallback((branding) => {
     const root = document.documentElement
