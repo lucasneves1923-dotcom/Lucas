@@ -18,6 +18,9 @@ bobina:
 #   espacamento_cm:  distância entre as peças (medida de sangria a sangria)
 #   girar_permitido: pode girar 90° se couber mais peças / gastar menos bobina
 #   dpi_minimo:      abaixo disso, imagem é recusada por baixa resolução
+#   linha_corte:     desenha a linha de corte da plotter (CutContour) em volta de cada peça
+#   formato:         retangulo | arredondado | redondo  (forma da linha de corte)
+#   raio_canto_cm:   raio dos cantos quando o formato é "arredondado"
 tipos:
   adesivo:
     montar: true
@@ -26,6 +29,9 @@ tipos:
     espacamento_cm: 0.3
     girar_permitido: true
     dpi_minimo: 150
+    linha_corte: true
+    formato: retangulo
+    raio_canto_cm: 0
   banner:
     montar: false
     sangria_cm: 2.0
@@ -33,6 +39,7 @@ tipos:
     espacamento_cm: 0
     girar_permitido: false
     dpi_minimo: 72
+    linha_corte: false
   outro:
     montar: true
     sangria_cm: 0
@@ -40,6 +47,13 @@ tipos:
     espacamento_cm: 0.3
     girar_permitido: true
     dpi_minimo: 150
+    linha_corte: false
+
+corte:
+  nome_cor: CutContour        # nome da cor spot que o seu RIP reconhece como corte
+                              # (VersaWorks/Onyx/FlexiPrint: CutContour)
+  espessura_pt: 0.25          # espessura da linha (só visual; a plotter não usa)
+  cor_visualizacao_cmyk: [0, 1, 0, 0]  # como a linha aparece na tela (magenta)
 
 qualidade:
   tolerancia_proporcao: 0.02  # 2%: diferença aceita entre a arte e o tamanho pedido

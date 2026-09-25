@@ -72,7 +72,7 @@ def test_arte_que_ja_tem_sangria(tmp_path, config, arte_pdf):
     ped = _pedido(tmp_path, config, id="t6", tipo="adesivo", largura_cm=4.6, altura_cm=4.6,
                   modo_sangria="arte_ja_tem", itens=[{"arquivo": arte_pdf.name, "quantidade": 10}])
     r = processar(ped, config)
-    assert r["tamanho_com_sangria_cm"] == [5.0, 5.0]
+    assert r["itens"][0]["tamanho_com_sangria_cm"] == [5.0, 5.0]
 
 
 @pytest.mark.parametrize("campo,valor,erro", [
@@ -87,3 +87,64 @@ def test_ficha_invalida(tmp_path, config, arte_pdf, campo, valor, erro):
     dados[campo] = valor
     with pytest.raises(ErroGrafica, match=erro):
         _pedido(tmp_path, config, **dados)
+
+
+def _contornos(pagina):
+    """Traços na cor de corte (magenta na visualização)."""
+    return [d for d in pagina.get_drawings()
+            if d.get("color") and d["color"][1] < 0.2 and d["color"][0] > 0.8 and d.get("fill") is None]
+
+
+def test_linha_de_corte_no_tamanho_final(tmp_path, config, arte_pdf):
+    ped = _pedido(tmp_path, config, id="c1", tipo="adesivo", largura_cm=5, altura_cm=5,
+                  itens=[{"arquivo": arte_pdf.name, "quantidade": 4}])
+    r = processar(ped, config)
+    doc = pymupdf.open(r["arquivo_final"])
+    assert b"/CutContour" in open(r["arquivo_final"], "rb").read()
+    linhas = _contornos(doc[0])
+    assert len(linhas) == 4
+    for d in linhas:  # corte = tamanho final (sem a sangria de 0,2 cm)
+        assert d["rect"].width == pytest.approx(cm(5), abs=0.05)
+        assert d["rect"].height == pytest.approx(cm(5), abs=0.05)
+
+
+def test_linha_de_corte_redonda(tmp_path, config, arte_pdf):
+    ped = _pedido(tmp_path, config, id="c2", tipo="adesivo", largura_cm=5, altura_cm=5,
+                  formato="redondo", itens=[{"arquivo": arte_pdf.name, "quantidade": 1}])
+    r = processar(ped, config)
+    d = _contornos(pymupdf.open(r["arquivo_final"])[0])[0]
+    assert any(item[0] == "c" for item in d["items"])  # curvas, não retângulo
+    assert d["rect"].width == pytest.approx(cm(5), abs=0.05)
+
+
+def test_sem_linha_de_corte_quando_desligada(tmp_path, config, arte_pdf):
+    ped = _pedido(tmp_path, config, id="c3", tipo="adesivo", largura_cm=5, altura_cm=5,
+                  linha_corte=False, itens=[{"arquivo": arte_pdf.name, "quantidade": 2}])
+    r = processar(ped, config)
+    assert b"CutContour" not in open(r["arquivo_final"], "rb").read()
+
+
+def test_tamanhos_diferentes_na_mesma_bobina(tmp_path, config, arte_pdf, arte_png):
+    # PDF 5x5 cm usado como 10x10 (vetor, escala sem perda) + PNG 5x5 cm
+    ped = _pedido(tmp_path, config, id="m1", tipo="adesivo", itens=[
+        {"arquivo": arte_pdf.name, "quantidade": 7, "largura_cm": 10, "altura_cm": 10},
+        {"arquivo": arte_png.name, "quantidade": 40, "largura_cm": 5, "altura_cm": 5},
+    ])
+    r = processar(ped, config)
+    assert r["quantidade"] == 47
+    assert "tamanhos-variados" in r["arquivo_final"]
+    doc = pymupdf.open(r["arquivo_final"])
+    assert doc[0].get_text().count("TESTE") == 7
+    cortes = [d["rect"] for d in _contornos(doc[0])]
+    assert len(cortes) == 47
+    # nenhuma peça sobreposta e todas dentro da área útil da bobina
+    for i, a in enumerate(cortes):
+        assert a.x0 >= cm(1) - 0.01 and a.x1 <= cm(126) + 0.01
+        for b in cortes[i + 1:]:
+            assert not a.intersects(b)
+
+
+def test_item_sem_tamanho_da_erro(tmp_path, config, arte_pdf):
+    with pytest.raises(ErroGrafica, match="largura_cm"):
+        _pedido(tmp_path, config, id="m2", tipo="adesivo",
+                itens=[{"arquivo": arte_pdf.name, "quantidade": 1}])

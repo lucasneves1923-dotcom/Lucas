@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .config import MODOS_SANGRIA, ErroGrafica
+from .corte import FORMATOS
 
 EXTENSOES_ACEITAS = {".pdf", ".cdr", ".png", ".jpg", ".jpeg", ".tif", ".tiff"}
 
@@ -15,6 +16,8 @@ EXTENSOES_ACEITAS = {".pdf", ".cdr", ".png", ".jpg", ".jpeg", ".tif", ".tiff"}
 class Item:
     arquivo: Path
     quantidade: int
+    largura_cm: float  # tamanho final desta arte (sem sangria)
+    altura_cm: float
     pagina: int = 1  # página do PDF/CDR (começa em 1)
 
 
@@ -22,8 +25,6 @@ class Item:
 class Pedido:
     id: str
     tipo: str
-    largura_cm: float
-    altura_cm: float
     itens: list[Item]
     montar: bool
     sangria_cm: float
@@ -31,6 +32,9 @@ class Pedido:
     espacamento_cm: float
     girar_permitido: bool
     dpi_minimo: float
+    linha_corte: bool
+    formato: str
+    raio_canto_cm: float
     cliente: str = ""
     observacoes: str = ""
     pasta: Path = field(default_factory=Path)
@@ -38,6 +42,10 @@ class Pedido:
     @property
     def quantidade_total(self) -> int:
         return sum(i.quantidade for i in self.itens)
+
+    @property
+    def tamanho_unico(self) -> bool:
+        return len({(i.largura_cm, i.altura_cm) for i in self.itens}) == 1
 
 
 def _numero(dados: dict, chave: str, positivo: bool = True) -> float:
@@ -70,9 +78,9 @@ def montar_pedido(dados: dict, config: dict, pasta: Path) -> Pedido:
         )
     padrao = config["tipos"][tipo]
 
-    def opcao(chave):
+    def opcao(chave, reserva=None):
         valor = dados.get(chave)
-        return padrao[chave] if valor is None else valor
+        return padrao.get(chave, reserva) if valor is None else valor
 
     itens_brutos = dados.get("itens")
     if not isinstance(itens_brutos, list) or not itens_brutos:
@@ -100,7 +108,15 @@ def montar_pedido(dados: dict, config: dict, pasta: Path) -> Pedido:
         pagina = bruto.get("pagina", 1)
         if isinstance(pagina, bool) or not isinstance(pagina, int) or pagina < 1:
             raise ErroGrafica(f"pedido.json: item {n}: 'pagina' precisa ser inteiro ≥ 1")
-        itens.append(Item(arquivo=arquivo, quantidade=quantidade, pagina=pagina))
+        tamanho = {}
+        for chave in ("largura_cm", "altura_cm"):
+            fonte = bruto if bruto.get(chave) is not None else dados
+            if fonte.get(chave) is None:
+                raise ErroGrafica(
+                    f"pedido.json: item {n} está sem '{chave}' (informe no item ou no pedido)"
+                )
+            tamanho[chave] = _numero(fonte, chave)
+        itens.append(Item(arquivo=arquivo, quantidade=quantidade, pagina=pagina, **tamanho))
 
     modo = opcao("modo_sangria")
     if modo not in MODOS_SANGRIA:
@@ -108,12 +124,19 @@ def montar_pedido(dados: dict, config: dict, pasta: Path) -> Pedido:
             f"pedido.json: 'modo_sangria' deve ser um de {list(MODOS_SANGRIA)} (recebi {modo!r})"
         )
 
-    mesclado = {**dados, "sangria_cm": opcao("sangria_cm"), "espacamento_cm": opcao("espacamento_cm")}
+    formato = opcao("formato", "retangulo")
+    if formato not in FORMATOS:
+        raise ErroGrafica(f"pedido.json: 'formato' deve ser um de {list(FORMATOS)} (recebi {formato!r})")
+
+    mesclado = {
+        **dados,
+        "sangria_cm": opcao("sangria_cm"),
+        "espacamento_cm": opcao("espacamento_cm"),
+        "raio_canto_cm": opcao("raio_canto_cm", 0),
+    }
     return Pedido(
         id=str(dados.get("id") or pasta.name),
         tipo=tipo,
-        largura_cm=_numero(dados, "largura_cm"),
-        altura_cm=_numero(dados, "altura_cm"),
         itens=itens,
         montar=bool(opcao("montar")),
         sangria_cm=_numero(mesclado, "sangria_cm", positivo=False),
@@ -121,6 +144,9 @@ def montar_pedido(dados: dict, config: dict, pasta: Path) -> Pedido:
         espacamento_cm=_numero(mesclado, "espacamento_cm", positivo=False),
         girar_permitido=bool(opcao("girar_permitido")),
         dpi_minimo=float(padrao.get("dpi_minimo", 0)),
+        linha_corte=bool(opcao("linha_corte", False)),
+        formato=formato,
+        raio_canto_cm=_numero(mesclado, "raio_canto_cm", positivo=False),
         cliente=str(dados.get("cliente", "")),
         observacoes=str(dados.get("observacoes", "")),
         pasta=pasta,

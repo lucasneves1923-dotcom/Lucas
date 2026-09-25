@@ -48,3 +48,31 @@ def test_peca_maior_que_bobina_da_erro():
 def test_peca_larga_cabe_girada():
     l = calcular(200, 100, 1, BOBINA, 0, True)
     assert l.girado and l.colunas == 1
+
+
+def test_prateleiras_encaixa_pequenas_ao_lado_das_grandes():
+    from grafica.montagem import calcular_prateleiras
+    m = calcular_prateleiras([(60, 40, 2), (4, 4, 10)], BOBINA, 0, True)
+    # as duas de 60 ocupam 120 dos 125 cm; cabe 1 pequena ao lado, as outras 9 vão pra faixa de baixo
+    assert m.detalhes["faixas"] == 2
+    assert len(m.posicoes) == 12
+    assert m.alturas_paginas_cm == [pytest.approx(2 + 40 + 4 + 2)]
+
+
+def test_prateleiras_deita_peca_comprida():
+    from grafica.montagem import calcular_prateleiras
+    m = calcular_prateleiras([(3, 100, 1)], BOBINA, 0, True)
+    assert m.posicoes[0].girado and m.posicoes[0].h_cm == 3
+
+
+def test_prateleiras_peca_que_nao_cabe():
+    from grafica.montagem import calcular_prateleiras
+    with pytest.raises(ErroGrafica, match="item 2"):
+        calcular_prateleiras([(5, 5, 1), (130, 130, 1)], BOBINA, 0, True)
+
+
+def test_prateleiras_quebra_pagina():
+    from grafica.montagem import calcular_prateleiras
+    m = calcular_prateleiras([(125, 100, 6), (5, 5, 1)], BOBINA, 0, False)
+    assert m.detalhes["paginas"] == 2
+    assert all(a <= 500 for a in m.alturas_paginas_cm)

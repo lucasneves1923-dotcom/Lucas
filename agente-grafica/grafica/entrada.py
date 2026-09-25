@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 import pymupdf
 
 from . import corel
@@ -44,8 +43,8 @@ def _pixels(item: Item) -> tuple[int, int] | None:
 def normalizar(item: Item, pedido: Pedido, config: dict, avisos: list[str]) -> pymupdf.Document:
     """Devolve um PDF de 1 página com a arte no tamanho final (ou final + sangria, se a arte já tem)."""
     sangria = pedido.sangria_cm if pedido.modo_sangria == "arte_ja_tem" else 0
-    largura_cm = pedido.largura_cm + 2 * sangria
-    altura_cm = pedido.altura_cm + 2 * sangria
+    largura_cm = item.largura_cm + 2 * sangria
+    altura_cm = item.altura_cm + 2 * sangria
 
     fonte = _abrir_fonte(item, pedido, config, avisos)
     if item.pagina > fonte.page_count:

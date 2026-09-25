@@ -7,13 +7,17 @@ import re
 
 import pymupdf
 
-from . import entrada, montagem, sangria
-from .config import pasta
+from . import corte, entrada, montagem, sangria
+from .config import cm, pasta
 from .pedido import Pedido
 
 
 def _nome_seguro(texto: str) -> str:
     return re.sub(r"[^\w\-]+", "_", texto, flags=re.UNICODE).strip("_")[:60] or "pedido"
+
+
+def _cm(v: float) -> float:
+    return round(v, 4)
 
 
 def processar(pedido: Pedido, config: dict) -> dict:
@@ -23,48 +27,70 @@ def processar(pedido: Pedido, config: dict) -> dict:
     pecas = []
     for item in pedido.itens:
         peca = entrada.normalizar(item, pedido, config, avisos)
-        peca = sangria.aplicar(peca, pedido.sangria_cm, pedido.modo_sangria, config)
-        pecas.append((peca, item.quantidade))
+        pecas.append(sangria.aplicar(peca, pedido.sangria_cm, pedido.modo_sangria, config))
 
     tem_sangria = pedido.modo_sangria != "nenhuma" and pedido.sangria_cm > 0
     s = pedido.sangria_cm if tem_sangria else 0
-    largura_peca = pedido.largura_cm + 2 * s
-    altura_peca = pedido.altura_cm + 2 * s
+    tamanhos = [(i.largura_cm + 2 * s, i.altura_cm + 2 * s, i.quantidade) for i in pedido.itens]
 
+    primeiro = pedido.itens[0]
+    medida = (f"{primeiro.largura_cm:g}x{primeiro.altura_cm:g}cm" if pedido.tamanho_unico
+              else "tamanhos-variados")
     nome = _nome_seguro(f"{pedido.cliente}_{pedido.id}" if pedido.cliente else pedido.id)
-    destino = pasta(config, "saida") / f"{nome}_{pedido.tipo}_{pedido.largura_cm:g}x{pedido.altura_cm:g}cm.pdf"
+    destino = pasta(config, "saida") / f"{nome}_{pedido.tipo}_{medida}.pdf"
+
+    contorno = None
+    if pedido.linha_corte:
+        contorno = {"sangria_cm": s, "formato": pedido.formato, "raio_cm": pedido.raio_canto_cm}
 
     relatorio = {
         "pedido": pedido.id,
         "cliente": pedido.cliente,
         "tipo": pedido.tipo,
-        "tamanho_final_cm": [pedido.largura_cm, pedido.altura_cm],
+        "itens": [
+            {"arquivo": i.arquivo.name, "quantidade": i.quantidade,
+             "tamanho_final_cm": [i.largura_cm, i.altura_cm],
+             "tamanho_com_sangria_cm": [_cm(w), _cm(h)]}
+            for i, (w, h, _) in zip(pedido.itens, tamanhos, strict=True)
+        ],
         "sangria_cm": s,
         "modo_sangria": pedido.modo_sangria,
-        "tamanho_com_sangria_cm": [round(largura_peca, 4), round(altura_peca, 4)],
+        "linha_corte": (f"{pedido.formato} ({config['corte']['nome_cor']})"
+                        if pedido.linha_corte else "não"),
         "quantidade": pedido.quantidade_total,
         "arquivo_final": str(destino),
         "avisos": avisos,
     }
 
     if pedido.montar:
-        layout = montagem.calcular(
-            largura_peca, altura_peca, pedido.quantidade_total,
-            bobina, pedido.espacamento_cm, pedido.girar_permitido,
-        )
-        final = montagem.gerar_pdf(pecas, layout, bobina, pedido.espacamento_cm)
-        relatorio["montagem"] = layout.como_dict()
-        relatorio["resumo"] = layout.resumo()
+        if pedido.tamanho_unico:
+            w, h, _ = tamanhos[0]
+            layout = montagem.calcular(w, h, pedido.quantidade_total, bobina,
+                                       pedido.espacamento_cm, pedido.girar_permitido)
+            arranjo = montagem.posicoes_grade(layout, [i.quantidade for i in pedido.itens],
+                                              bobina, pedido.espacamento_cm)
+        else:
+            arranjo = montagem.calcular_prateleiras(tamanhos, bobina, pedido.espacamento_cm,
+                                                    pedido.girar_permitido)
+        final = montagem.gerar_pdf(pecas, arranjo, bobina, config, contorno)
+        relatorio["montagem"] = arranjo.detalhes
+        relatorio["resumo"] = arranjo.resumo
     else:
         # Sem montagem (ex.: banner): uma página por arte; o operador imprime N cópias.
         final = pymupdf.open()
-        for peca, _ in pecas:
+        for peca in pecas:
             final.insert_pdf(peca)
-        copias = ", ".join(f"{i.arquivo.name}: {i.quantidade}" for i in pedido.itens)
-        relatorio["resumo"] = (
-            f"{len(pecas)} arte(s) de {largura_peca:g} x {altura_peca:g} cm (com sangria). "
-            f"Imprimir cópias — {copias}"
+        if contorno:
+            for pagina in final:
+                r, sp = pagina.rect, cm(s)
+                corte.desenhar(final, pagina, [corte.Contorno(
+                    sp, sp, r.width - 2 * sp, r.height - 2 * sp,
+                    pedido.formato, cm(pedido.raio_canto_cm))], config)
+        copias = ", ".join(
+            f"{i.arquivo.name} ({_cm(w):g} x {_cm(h):g} cm com sangria): {i.quantidade}"
+            for i, (w, h, _) in zip(pedido.itens, tamanhos, strict=True)
         )
+        relatorio["resumo"] = f"{len(pecas)} arte(s), uma por página. Imprimir cópias — {copias}"
 
     final.set_metadata({"title": f"Pedido {pedido.id}", "creator": "agente-grafica"})
     final.save(destino, garbage=3, deflate=True)
