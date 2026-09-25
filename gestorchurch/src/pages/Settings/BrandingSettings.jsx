@@ -2,15 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Card } from '../../components/common/ui.jsx'
 import { useChurchData } from '../../context/DataContext.jsx'
 import { applyBrandingCssVars } from '../../lib/theme'
-
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result))
-    reader.onerror = () => reject(new Error('Não foi possível ler a imagem.'))
-    reader.readAsDataURL(file)
-  })
-}
+import { resizeImageToDataUrl } from '../../lib/image'
 
 const COMMIT_DELAY_MS = 400
 
@@ -29,6 +21,8 @@ export default function BrandingSettings() {
   const draftRef = useRef(draft)
   const commitTimerRef = useRef(null)
   const dirtyRef = useRef(false)
+  const [logoError, setLogoError] = useState('')
+  const [logoBusy, setLogoBusy] = useState(false)
 
   // Só resincroniza com o estado global quando não há edição local pendente
   // (evita que uma atualização vinda do servidor apague o que a pessoa está digitando).
@@ -81,9 +75,20 @@ export default function BrandingSettings() {
 
   async function handleLogoChange(file) {
     if (!file) return
-    const dataUrl = await readFileAsDataUrl(file)
-    setField('logoDataUrl', dataUrl)
-    commitNow() // arquivo é uma ação só, não precisa esperar debounce
+    setLogoError('')
+    setLogoBusy(true)
+    try {
+      // Redimensiona/comprime antes de guardar: um documento do banco de dados
+      // compartilhado tem limite de tamanho, e fotos de celular passam disso
+      // facilmente em base64. O logotipo só precisa ficar nítido em ~40px mesmo.
+      const dataUrl = await resizeImageToDataUrl(file)
+      setField('logoDataUrl', dataUrl)
+      commitNow() // arquivo é uma ação só, não precisa esperar debounce
+    } catch (error) {
+      setLogoError(error.message || 'Não foi possível usar essa imagem.')
+    } finally {
+      setLogoBusy(false)
+    }
   }
 
   function removeLogo() {
@@ -118,13 +123,21 @@ export default function BrandingSettings() {
               style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--color-border)' }}
             />
           )}
-          <input id="logo" type="file" accept="image/*" onChange={(e) => handleLogoChange(e.target.files?.[0])} />
+          <input
+            id="logo"
+            type="file"
+            accept="image/*"
+            disabled={logoBusy}
+            onChange={(e) => handleLogoChange(e.target.files?.[0])}
+          />
           {draft.logoDataUrl && (
             <button type="button" className="btn btn-secondary btn-sm" onClick={removeLogo}>
               Remover
             </button>
           )}
         </div>
+        {logoBusy && <span className="text-muted" style={{ fontSize: '0.82rem' }}>Processando imagem…</span>}
+        {logoError && <p style={{ color: 'var(--color-danger)', fontSize: '0.85rem' }}>{logoError}</p>}
       </div>
 
       <div className="field-row">
