@@ -1,0 +1,78 @@
+# ============================================================
+#  CONFIGURAÇÃO DA GRÁFICA — edite aqui, o agente obedece.
+#  Todas as medidas em CENTÍMETROS.
+# ============================================================
+
+bobina:
+  largura_cm: 127            # largura útil da bobina de adesivo (1,27 m)
+  margem_lateral_cm: 1.0     # espaço livre em cada lateral da bobina
+  margem_inicio_fim_cm: 2.0  # espaço livre no começo e no fim da impressão
+  comprimento_max_cm: 500    # acima disso o arquivo é dividido em várias páginas
+                             # (limite prático de PDF é ~508 cm)
+  centralizar: true          # centraliza as peças na largura da bobina
+
+# Valores padrão por tipo de pedido. O cartão do Trello pode sobrescrever.
+#   montar:          true = monta várias cópias na bobina; false = 1 arquivo por peça
+#   sangria_cm:      sangria adicionada em CADA lado da peça
+#   modo_sangria:    espelhar | esticar | arte_ja_tem | nenhuma
+#   espacamento_cm:  distância entre as peças (medida de sangria a sangria)
+#   girar_permitido: pode girar 90° se couber mais peças / gastar menos bobina
+#   dpi_minimo:      abaixo disso, imagem é recusada por baixa resolução
+#   linha_corte:     desenha a linha de corte da plotter (CutContour) em volta de cada peça
+#   formato:         retangulo | arredondado | redondo  (forma da linha de corte)
+#   raio_canto_cm:   raio dos cantos quando o formato é "arredondado"
+tipos:
+  adesivo:
+    montar: true
+    sangria_cm: 0.2
+    modo_sangria: espelhar
+    espacamento_cm: 0.3
+    girar_permitido: true
+    dpi_minimo: 150
+    linha_corte: true
+    formato: retangulo
+    raio_canto_cm: 0
+  banner:
+    montar: false
+    sangria_cm: 2.0
+    modo_sangria: espelhar
+    espacamento_cm: 0
+    girar_permitido: false
+    dpi_minimo: 72
+    linha_corte: false
+  outro:
+    montar: true
+    sangria_cm: 0
+    modo_sangria: nenhuma
+    espacamento_cm: 0.3
+    girar_permitido: true
+    dpi_minimo: 150
+    linha_corte: false
+
+corte:
+  nome_cor: CutContour        # nome da cor spot que o seu RIP reconhece como corte
+                              # (VersaWorks/Onyx/FlexiPrint: CutContour)
+  espessura_pt: 0.25          # espessura da linha (só visual; a plotter não usa)
+  cor_visualizacao_cmyk: [0, 1, 0, 0]  # como a linha aparece na tela (magenta)
+
+qualidade:
+  tolerancia_proporcao: 0.02  # 2%: diferença aceita entre a arte e o tamanho pedido
+  dpi_sangria: 200            # resolução usada para desenhar a área de sangria
+  cor_sangria: cmyk           # cmyk | rgb
+
+corel:
+  versao: 25                  # CorelDRAW 25
+  visivel: true               # mostra o Corel enquanto trabalha
+
+pastas:
+  trabalho: trabalho          # cartões baixados do Trello e fichas de pedido
+  saida: saida                # PDFs finais prontos para o RIP
+
+trello:
+  # Nomes EXATOS das listas no seu quadro do Trello
+  listas:
+    entrada: "A fazer"
+    em_producao: "Em produção"
+    duvidas: "Dúvidas do agente"
+    pronto: "Pronto para imprimir"
+  anexar_resultado: false     # true = anexa o PDF final no cartão (limite de tamanho do Trello)
