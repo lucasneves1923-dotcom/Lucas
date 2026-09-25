@@ -1,5 +1,6 @@
-import { LayoutDashboard, Users, Wallet, Boxes, FileText, Settings } from 'lucide-react'
+import { LayoutDashboard, Users, Wallet, Boxes, FileText, Megaphone, Settings } from 'lucide-react'
 import { useChurchData } from '../../context/DataContext.jsx'
+import { useRole } from '../../context/RoleContext.jsx'
 
 const NAV_ITEMS = [
   { key: 'dashboard', label: 'Painel', icon: LayoutDashboard },
@@ -7,11 +8,14 @@ const NAV_ITEMS = [
   { key: 'finance', label: 'Financeiro', icon: Wallet },
   { key: 'assets', label: 'Patrimônio', icon: Boxes },
   { key: 'reports', label: 'Relatórios', icon: FileText },
+  { key: 'mural', label: 'Mural', icon: Megaphone },
   { key: 'settings', label: 'Personalização', icon: Settings },
 ]
 
 export default function Sidebar({ activePage, onNavigate }) {
   const { branding } = useChurchData()
+  const { allowedPages } = useRole()
+  const visibleItems = NAV_ITEMS.filter((item) => allowedPages.includes(item.key))
 
   return (
     <nav className="app-sidebar" aria-label="Navegação principal">
@@ -30,7 +34,7 @@ export default function Sidebar({ activePage, onNavigate }) {
       </div>
 
       <ul className="sidebar-nav">
-        {NAV_ITEMS.map(({ key, label, icon: Icon }) => (
+        {visibleItems.map(({ key, label, icon: Icon }) => (
           <li key={key}>
             <button
               type="button"

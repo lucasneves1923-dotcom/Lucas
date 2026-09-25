@@ -30,8 +30,12 @@ oxlint.
   linear calculada automaticamente.
 - **Relatórios** — por período, contribuições anuais por membro (para
   declaração) e patrimônio, todos imprimíveis.
+- **Mural** — avisos e eventos do ministério; qualquer pessoa lê, só
+  Administradores publicam/editam/excluem. Só funciona no app publicado como
+  Artifact (depende do banco de dados compartilhado).
 - **Personalização** — nome da igreja, logotipo, cores (aplicadas em tempo
-  real), congregações/filiais, diagnóstico de armazenamento e backup manual.
+  real), congregações/filiais, usuários e níveis de acesso, diagnóstico de
+  armazenamento e backup manual.
 
 ## Persistência e limitações conhecidas
 
@@ -96,4 +100,38 @@ entre pessoas/dispositivos.
 Fora do ambiente de artefato (rodando como app comum, via `npm run dev`/
 `npm run build`), tudo cai de volta para `localStorage` + chave de API +
 link de download tradicional, como descrito nas seções acima — esse
-caminho não depende de nenhuma capability e continua funcionando sozinho.
+caminho não depende de nenhuma capability e continua funcionando sozinho
+(sem níveis de acesso nem mural — todo mundo tem acesso total, como sempre).
+
+## Níveis de acesso (Administrador / Tesoureiro / Membro)
+
+Só existe (e só faz sentido) dentro do Artifact publicado, usando a
+capability `user` (`src/lib/userStore.js`) para saber quem está vendo a
+página, e uma coleção `roles` no banco de dados (`src/context/RoleContext.jsx`)
+para saber o papel de cada um:
+
+- **Administrador** — acesso completo: todas as páginas, inclusive
+  Personalização/Usuários. O dono do Artifact é sempre Administrador,
+  mesmo sem estar na coleção `roles`.
+- **Tesoureiro** — Painel, Financeiro, Patrimônio, Relatórios e Mural
+  (leitura). Sem Membros nem Personalização.
+- **Membro** — só Painel (visão geral, inclusive financeira) e Mural. É o
+  padrão para qualquer pessoa que abra o link sem receber um papel — não
+  existe fila de aprovação, a pessoa já entra vendo o essencial.
+
+Quem concede acesso: em Personalização → Usuários, busca-se alguém da
+organização pelo nome (`user.search`, só funciona para quem tem permissão
+de edição do Artifact — dono, ou quem o dono deu acesso de "pode editar" no
+menu de compartilhamento nativo do Claude) e atribui-se um papel, que grava
+em `roles/<id do usuário>`.
+
+**Isso é controle de acesso no nível da interface, não uma trava de
+segurança do servidor.** As regras do banco de dados (`capabilities.db.rules`)
+restringem quem pode ESCREVER na coleção `roles` (só quem tem "pode editar"
+do Claude) para evitar autopromoção, mas o resto das coleções
+(`members`, `financeEntries`, etc.) continua com escrita aberta a qualquer
+signatário — os papéis decidem o que aparece no menu e evitam cliques por
+engano, não impedem alguém tecnicamente hábil de acessar dados pelo
+console do navegador. Para o uso pretendido (equipe de confiança de uma
+igreja) isso é proporcional; não é o desenho certo para dados realmente
+sensíveis/adversariais.

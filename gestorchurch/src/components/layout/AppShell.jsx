@@ -2,9 +2,12 @@ import { Loader2 } from 'lucide-react'
 import Sidebar from './Sidebar.jsx'
 import { SaveIndicator } from '../common/ui.jsx'
 import { useChurchData } from '../../context/DataContext.jsx'
+import { useRole } from '../../context/RoleContext.jsx'
 
 export default function AppShell({ activePage, onNavigate, children }) {
-  const { saveStatus, isLoading } = useChurchData()
+  const { saveStatus, isLoading: dataLoading } = useChurchData()
+  const { loading: roleLoading } = useRole()
+  const isLoading = dataLoading || roleLoading
 
   return (
     <div className="app-shell">

@@ -128,4 +128,23 @@ e indicador de salvamento — mas "compartilhado" nesse caso significa *entre
 abas do mesmo navegador*, não entre dispositivos diferentes. O backup manual
 em `.json` continua valendo nos dois modos, como rede de segurança e como
 forma de levar dados entre ambientes. Ver `README.md` para detalhes de cada
-capability usada (`db`, `sample`, `downloads`).
+capability usada (`db`, `sample`, `downloads`, `user`).
+
+### Módulo 7 — Mural (adicionado depois da v1)
+
+Quadro de avisos/eventos do ministério: lista de posts (título, data opcional
+do evento, texto), mais recentes primeiro. Todo mundo lê; só quem tem nível
+de acesso "Administrador" publica, edita ou exclui. Só funciona no Artifact
+publicado (depende da coleção `muralPosts` no banco compartilhado) — fora
+dele mostra um aviso explicando isso em vez de quebrar.
+
+### Níveis de acesso (adicionado depois da v1)
+
+Administrador / Tesoureiro / Membro, controlando o que cada pessoa vê no
+menu lateral (ver README.md para a matriz de acesso completa e as
+limitações — é controle de interface, não uma trava de segurança de
+servidor). Só existe no Artifact publicado, usando a capability `user` para
+identificar quem está vendo a página e uma coleção `roles` no banco para
+guardar o papel de cada pessoa. O dono do Artifact é sempre Administrador;
+qualquer outra pessoa entra como "Membro" até alguém com permissão de
+edição do Artifact atribuir um papel diferente em Personalização → Usuários.

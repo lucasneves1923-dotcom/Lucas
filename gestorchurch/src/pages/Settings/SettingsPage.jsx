@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import BrandingSettings from './BrandingSettings.jsx'
 import CongregationsSettings from './CongregationsSettings.jsx'
+import UsersSettings from './UsersSettings.jsx'
 import DiagnosticsSettings from './DiagnosticsSettings.jsx'
 import BackupSettings from './BackupSettings.jsx'
 
 const TABS = [
   { key: 'branding', label: 'Identidade visual', Component: BrandingSettings },
   { key: 'congregations', label: 'Congregações', Component: CongregationsSettings },
+  { key: 'users', label: 'Usuários', Component: UsersSettings },
   { key: 'diagnostics', label: 'Diagnóstico', Component: DiagnosticsSettings },
   { key: 'backup', label: 'Backup', Component: BackupSettings },
 ]
@@ -20,7 +22,7 @@ export default function SettingsPage() {
       <div className="page-header">
         <div>
           <h1>Personalização</h1>
-          <p className="page-subtitle">Marca, congregações, diagnóstico e backup</p>
+          <p className="page-subtitle">Marca, congregações, usuários, diagnóstico e backup</p>
         </div>
       </div>
 
