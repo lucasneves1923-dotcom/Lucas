@@ -22,18 +22,21 @@ export default function BrandingSettings() {
   // si é adiada um pouco (ou disparada ao sair do campo/fechar a aba) para não
   // mandar uma escrita a cada tecla/pixel arrastado.
   const [draft, setDraft] = useState(branding)
+  // draftRef é a fonte da verdade para leitura síncrona (setState/useEffect só
+  // refletem no próximo render, o que é tarde demais para quem chama commitNow()
+  // logo em seguida de um setField(), como o upload de logo). Toda escrita em
+  // draftRef acontece diretamente onde o valor muda, nunca via useEffect.
   const draftRef = useRef(draft)
   const commitTimerRef = useRef(null)
   const dirtyRef = useRef(false)
 
-  useEffect(() => {
-    draftRef.current = draft
-  }, [draft])
-
   // Só resincroniza com o estado global quando não há edição local pendente
   // (evita que uma atualização vinda do servidor apague o que a pessoa está digitando).
   useEffect(() => {
-    if (!dirtyRef.current) setDraft(branding)
+    if (!dirtyRef.current) {
+      draftRef.current = branding
+      setDraft(branding)
+    }
   }, [branding])
 
   function commitNow() {
@@ -67,6 +70,7 @@ export default function BrandingSettings() {
   function setField(field, value) {
     const next = { ...draftRef.current, [field]: value }
     dirtyRef.current = true
+    draftRef.current = next
     setDraft(next)
     if (field === 'primaryColor' || field === 'accentColor') {
       applyBrandingCssVars(next) // pré-visualização instantânea, sem esperar a gravação
