@@ -3,6 +3,7 @@ import { loadData, saveData } from '../lib/storage'
 import { generateId } from '../lib/id'
 import { isRunningInsideArtifact } from '../lib/artifactEnv'
 import { describeDbError, getDb, replaceCollection, snapshotToArray } from '../lib/dbStore'
+import { applyBrandingCssVars } from '../lib/theme'
 
 const DataContext = createContext(null)
 
@@ -167,18 +168,9 @@ export function DataProvider({ children }) {
     }
   }, [storageMode, performLocalSave])
 
-  const applyBrandingCssVars = useCallback((branding) => {
-    const root = document.documentElement
-    if (branding.primaryColor) root.style.setProperty('--color-ink', branding.primaryColor)
-    if (branding.accentColor) {
-      root.style.setProperty('--color-accent', branding.accentColor)
-      root.style.setProperty('--color-accent-soft', `${branding.accentColor}33`)
-    }
-  }, [])
-
   useEffect(() => {
     applyBrandingCssVars(state.branding)
-  }, [state.branding, applyBrandingCssVars])
+  }, [state.branding])
 
   // --- Ações: em modo db, escrevem direto no banco (a assinatura acima reflete o resultado);
   // em modo local, atualizam o estado em memória (o efeito de debounce acima persiste). ---
@@ -262,7 +254,25 @@ export function DataProvider({ children }) {
         if (storageMode === 'db') {
           return dbWrite((db) => db.doc('settings/branding').set(nextBranding))
         }
-        return localMutate((s) => ({ ...s, branding: nextBranding }))
+        // Modo local: o formulário de marca já decide quando gravar (debounce/blur/
+        // fechar a aba) — grava na hora aqui em vez de agendar OUTRO debounce por
+        // cima do dele, que faria a gravação real só acontecer bem depois do que
+        // o formulário (e seu próprio flush ao fechar a aba) já previa.
+        const nextState = { ...stateRef.current, branding: nextBranding }
+        setState(nextState)
+        if (debounceRef.current) {
+          clearTimeout(debounceRef.current)
+          debounceRef.current = null
+        }
+        const { __loadMode, ...persistable } = nextState
+        const result = saveData(persistable)
+        setSaveStatus({
+          status: result.ok ? 'saved' : 'error',
+          mode: result.mode,
+          reason: result.reason || null,
+          savedAt: new Date().toISOString(),
+        })
+        return undefined
       },
 
       restoreFromBackup: (data) => {
