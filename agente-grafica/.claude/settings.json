@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m grafica:*)",
+      "Bash(py -m grafica:*)",
+      "Read(./**)",
+      "Edit(./trabalho/**)",
+      "Write(./trabalho/**)"
+    ],
+    "deny": [
+      "Read(./.env)"
+    ]
+  }
+}
